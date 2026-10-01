@@ -1,90 +1,111 @@
-const EventEmitter = require('events');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
 
-class Element extends EventEmitter {
+const PORT = 3000;
+const directory = path.join(__dirname, 'files');
 
-    constructor(name, parent = null) {
-        super();
-        this.name = name;
-        this.parent = parent;
+if (!fs.existsSync(directory)) {
+    fs.mkdirSync(directory);
+}
+
+const server = http.createServer((req, res) => {
+
+ 
+    if (req.method === 'POST' && req.url.startsWith('/files/')) {
+
+        const fileName = req.url.split('/files/')[1];
+        const filePath = path.join(directory, fileName);
+
+        let data = "";
+
+        req.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        req.on('end', () => {
+
+            fs.writeFile(filePath, data, (err) => {
+
+                if (err) {
+                    res.writeHead(500);
+                    res.end('Error writing file');
+                    return;
+                }
+
+                res.writeHead(200);
+                res.end('File written successfully');
+            });
+        });
     }
 
-    addEventListener(type, handler) {
-        this.on(type, handler);
-    }
+    else if (req.method === 'GET' && req.url.startsWith('/files/')) {
 
-    removeEventListener(type, handler) {
-        this.off(type, handler);
-    }
+        const fileName = req.url.split('/files/')[1];
+        const filePath = path.join(directory, fileName);
 
-    dispatchEvent(type, data = {}) {
+        fs.readFile(filePath, (err, data) => {
 
-        const event = {
-            type: type,
-            target: this,
-            currentTarget: this,
-            data: data,
-            stopped: false,
-
-            stopPropagation() {
-                this.stopped = true;
+            if (err) {
+                res.writeHead(404);
+                res.end('File not found');
+                return;
             }
-        };
 
-        let current = this;
+            res.writeHead(200);
+            res.end(data);
+        });
+    }
 
-        while (current) {
+   
+    else if (req.method === 'DELETE' && req.url.startsWith('/files/')) {
 
-            event.currentTarget = current;
+        const fileName = req.url.split('/files/')[1];
+        const filePath = path.join(directory, fileName);
 
-            current.emit(type, event);
+        fs.unlink(filePath, (err) => {
 
-            if (event.stopped) {
-                break;
+            if (err) {
+                res.writeHead(404);
+                res.end('Error deleting file');
+                return;
             }
 
-            current = current.parent;
-        }
+            res.writeHead(200);
+            res.end('File deleted successfully');
+        });
     }
-}
-const documentElement = new Element('document');
-const form = new Element('form', documentElement);
-const button = new Element('button', form);
-function clickHandler(event) {
-    console.log(
-        `Element: ${this.name}, Target: ${event.target.name}, CurrentTarget: ${event.currentTarget.name}`
-    );
-}
-documentElement.addEventListener('click', clickHandler);
-form.addEventListener('click', clickHandler);
-button.addEventListener('click', clickHandler);
-console.log('\n--- Scenario A ---');
 
-button.dispatchEvent('click');
-console.log('\n--- Scenario B ---');
+else if (req.method === 'PUT' && req.url.startsWith('/files/')) {
+    const fileName = req.url.split('/files/')[1];
+        const filePath = path.join(directory, fileName);
 
-function formStopHandler(event) {
-    console.log('Form: stopping propagation');
-    event.stopPropagation();
-}
+        let data = "";
 
-form.removeEventListener('click', clickHandler);
-form.addEventListener('click', formStopHandler);
+        req.on('data', (chunk) => {
+            data += chunk;
+        });
 
-button.dispatchEvent('click');
-console.log('\n--- Scenario C ---');
+        req.on('end', () => {
 
-button.removeEventListener('click', clickHandler);
+            fs.writeFile(filePath, data, (err) => {
 
-button.dispatchEvent('click');
+                if (err) {
+                    res.writeHead(500);
+                    res.end('Error writing file');
+                    return;
+                }
 
-console.log('\n--- Keypress Event ---');
-
-form.addEventListener('keypress', (event) => {
-    console.log(
-        `Keypress handled by ${event.currentTarget.name}`
-    );
+                res.writeHead(200);
+                res.end('File updated successfully');
+            });
+        });
+    }
+    else {
+        res.writeHead(404);
+        res.end('Route not found');
+    }
 });
-
-form.dispatchEvent('keypress', {
-    key: 'Enter'
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
